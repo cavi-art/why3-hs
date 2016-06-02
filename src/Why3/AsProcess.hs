@@ -2,6 +2,7 @@
 module Why3.AsProcess (
   discharge,
   isValidProof,
+  dischargeTheory,
 
   Prover(..),
   SMTOutput(..),
@@ -22,9 +23,12 @@ data SMTOutput = Valid | Invalid | Unknown | Failure | Timeout String
 
 type VersionedProver = (Prover, Maybe String)
 
+discharge :: ProverSpec a => a -> String -> String -> SMTOutput
+discharge prover theoryImports = why3Output . getWhy3Output prover . embedFormulaInTheory
+  where embedFormulaInTheory f = "theory T " ++ theoryImports ++ " goal g: " ++ f ++ "end"
 
-discharge :: ProverSpec a => a -> String -> SMTOutput
-discharge prover = why3Output . dischargeToStr prover
+dischargeTheory :: ProverSpec a => a -> String -> SMTOutput
+dischargeTheory prover = why3Output . getWhy3Output prover
 
 
 isValidProof :: SMTOutput -> Bool
@@ -32,8 +36,8 @@ isValidProof Valid = True
 isValidProof _ = False
 
 
-dischargeToStr :: ProverSpec a => a -> String -> String
-dischargeToStr prover text =
+getWhy3Output :: ProverSpec a => a -> String -> String
+getWhy3Output prover text =
   unsafePerformIO $ readProcess pathToWhy3 why3Params text
   where proverStr = stringFromProver prover
         pathToWhy3 = "why3"
@@ -42,7 +46,7 @@ dischargeToStr prover text =
                       "--timelimit", "1", -- one second fixed timelimit for now
                       "-", "-P", proverStr]
 
-{-# NOINLINE dischargeToStr #-}
+{-# NOINLINE getWhy3Output #-}
 
 
 why3Output :: String -> SMTOutput
