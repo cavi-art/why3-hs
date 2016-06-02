@@ -10,6 +10,20 @@ using Haskell's ADTs for dealing with the different outputs that Why3
 can deal with, as well as parsing that output already.
 
 
+Usage
+=====
+
+```haskell
+import Why3.AsProcess
+
+x = discharge Z3 "import int.Int" "forall a: int. a = a"
+-- x: Valid :: SMTOutput
+
+y = isValidProof $ dischargeTheory Z3 "theory T goal G: forall a: int. a = a end"
+-- y: True :: Bool
+```
+
+
 Using this library on your project
 ==================================
 
