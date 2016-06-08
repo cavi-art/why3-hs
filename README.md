@@ -48,7 +48,8 @@ they will end up being integrated here.
 
 By sending a Pull Request you agree to publish your own code under the same 
 license as the one stated in the repository.
-  
+
+  [flow]: https://guides.github.com/introduction/flow/
 
 Acknowledgements
 ================
