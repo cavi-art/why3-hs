@@ -1,0 +1,117 @@
+sudo: false
+
+# Lightweight base image; we are providing stack ourselves
+language: c
+
+cache:
+  directories:
+  - $HOME/.ghc
+  - $HOME/.cabal
+  - $HOME/.stack
+  - $HOME/.why3
+
+apt:
+  packages:
+  - libgmp-dev
+  - z3
+
+matrix:
+  include:
+  - env: BUILD=cabal GHCVER=7.8.4 CABALVER=1.18 HAPPYVER=1.19.5 ALEXVER=3.1.7
+    compiler: ": #GHC 7.8.4"
+    addons: {apt: {packages: [cabal-install-1.18,ghc-7.8.4,happy-1.19.5,alex-3.1.7], sources: [hvr-ghc]}}
+  - env: BUILD=cabal GHCVER=7.10.3 CABALVER=1.22 HAPPYVER=1.19.5 ALEXVER=3.1.7
+    compiler: ": #GHC 7.10.3"
+    addons: {apt: {packages: [cabal-install-1.22,ghc-7.10.3,happy-1.19.5,alex-3.1.7], sources: [hvr-ghc]}}
+  - env: BUILD=stack ARGS=""
+    compiler: ": #stack default"
+    addons: {apt: {packages: [ghc-7.10.3], sources: [hvr-ghc]}}
+  - env: BUILD=stack ARGS="--resolver lts-5"
+    compiler: ": #stack 7.10.3"
+    addons: {apt: {packages: [ghc-7.10.3], sources: [hvr-ghc]}}
+
+  # Nightly builds are allowed to fail
+  - env: BUILD=stack ARGS="--resolver nightly"
+    compiler: ": #stack nightly"
+    addons: {apt: {packages: [libgmp,libgmp-dev]}}
+
+  allow_failures:
+  - env: BUILD=stack ARGS="--resolver nightly"
+
+before_install:
+- unset CC
+- CABALARGS=""
+- if [ "x$GHCVER" = "xhead" ]; then CABALARGS=--allow-never; fi
+
+## Download and unpack stack
+- export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$HOME/.local/bin:$HOME/.cabal/bin:$HOME/.why3/bin:$PATH
+- mkdir -p ~/.local/bin
+- mkdir -p ~/.why3/bin
+- |
+  if [ `uname` = "Darwin" ]
+  then
+    travis_retry curl --insecure -L https://www.stackage.org/stack/osx-x86_64 | tar xz --strip-components=1 --include '*/stack' -C ~/.local/bin
+  else
+    travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
+  fi
+
+
+  # Use the more reliable S3 mirror of Hackage
+  mkdir -p $HOME/.cabal
+  echo 'remote-repo: hackage.haskell.org:http://hackage.fpcomplete.com/' > $HOME/.cabal/config
+  echo 'remote-repo-cache: $HOME/.cabal/packages' >> $HOME/.cabal/config
+
+  if [ "$CABALVER" != "1.16" ]
+  then
+    echo 'jobs: $ncpus' >> $HOME/.cabal/config
+  fi
+
+- PACKAGES=$(stack --install-ghc query locals | grep '^ *path' | sed 's@^ *path:@@')
+
+  # Install Why3 and at least Z3
+- travis_retry curl -L https://gforge.inria.fr/frs/download.php/file/35893/why3-0.87.1.tar.gz | tar xz --strip-components=1 -C ~/.why3
+- (cd ~/.why3 && ./configure --prefix=~/.why3 && make && make install )
+- why3 config --detect-provers
+
+install:
+- echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2>/dev/null) || echo '?']"
+- if [ -f configure.ac ]; then autoreconf -i; fi
+- |
+  set -ex
+  case "$BUILD" in
+    stack)
+      stack --no-terminal --install-ghc $ARGS test --bench --only-dependencies
+      ;;
+    cabal)
+      cabal --version
+      travis_retry cabal update
+      cabal install --only-dependencies --enable-tests --enable-benchmarks --force-reinstalls --ghc-options=-O0 --reorder-goals --max-backjumps=-1 $CABALARGS $PACKAGES
+      ;;
+  esac
+  set +ex
+
+script:
+- |
+  set -ex
+  case "$BUILD" in
+    stack)
+      stack --no-terminal $ARGS test --bench --no-run-benchmarks --haddock --no-haddock-deps
+      ;;
+    cabal)
+      cabal install --enable-tests --enable-benchmarks --force-reinstalls --ghc-options=-O0 --reorder-goals --max-backjumps=-1 $CABALARGS $PACKAGES
+
+      ORIGDIR=$(pwd)
+      for dir in $PACKAGES
+      do
+        cd $dir
+        cabal check || [ "$CABALVER" == "1.16" ]
+        cabal sdist
+        SRC_TGZ=$(cabal info . | awk '{print $2;exit}').tar.gz && \
+          (cd dist && cabal install --force-reinstalls "$SRC_TGZ")
+        cd $ORIGDIR
+      done
+      ;;
+  esac
+  set +ex
+
+
