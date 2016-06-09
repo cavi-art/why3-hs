@@ -67,10 +67,20 @@ before_install:
   fi
 
 - PACKAGES=$(stack --install-ghc query locals | grep '^ *path' | sed 's@^ *path:@@')
+  # Install OPAM
+- wget https://raw.github.com/ocaml/opam/master/shell/opam_installer.sh -O - | sh -s ~/.local/bin
+- |
+  eval `opam config env`
+  cat >~/.ocamlinit <<EOF
+    let () =
+      try Topdirs.dir_directory (Sys.getenv "OCAML_TOPLEVEL_PATH")
+      with Not_found -> ()
+    ;;
+  EOF
 
   # Install Why3 and at least Z3
 - travis_retry curl -L https://gforge.inria.fr/frs/download.php/file/35893/why3-0.87.1.tar.gz | tar xz --strip-components=1 -C ~/.why3
-- (cd ~/.why3 && ./configure --prefix=~/.why3 && make && make install )
+- (cd ~/.why3 && ./configure --prefix=$HOME/.why3 && make && make install )
 - why3 config --detect-provers
 
 install:
