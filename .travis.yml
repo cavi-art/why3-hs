@@ -79,8 +79,10 @@ before_install:
   EOF
 
   # Install Why3 and at least Z3
-- travis_retry curl -L https://gforge.inria.fr/frs/download.php/file/35893/why3-0.87.1.tar.gz | tar xz --strip-components=1 -C ~/.why3
-- (cd ~/.why3 && ./configure --prefix=$HOME/.why3 && make && make install )
+  #- travis_retry curl -L https://gforge.inria.fr/frs/download.php/file/35893/why3-0.87.1.tar.gz | tar xz --strip-components=1 -C ~/.why3
+  #- (cd ~/.why3 && ./configure --prefix=$HOME/.why3 && make && make install )
+  # Use OPAM
+- opam install --yes why3
 - why3 config --detect-provers
 
 install:
